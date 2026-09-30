@@ -1,11 +1,12 @@
 package uzv.alter.cinema.client;
 
 import uzv.alter.cinema.api.init.SessionInit;
-import uzv.alter.cinema.common.db.TranslationCore;
+import uzv.alter.cinema.common.db.*;
 import uzv.alter.cinema.common.film.Film;
 import uzv.alter.cinema.common.hall.Hall;
 import uzv.alter.cinema.common.seat.ISeatable;
 import uzv.alter.cinema.common.session.Session;
+import uzv.alter.cinema.common.translate.Component;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -35,12 +36,14 @@ public class CinemaFrame extends JFrame {
     private int currentSessionIndex = 0;
     private boolean isRebuildingUI = false;
 
+    private final SeatManager seatManager = new SeatManager();
+
     private record SelectedSeatInfo(int row, int col, ISeatable seatType, float finalPrice) {}
 
     private final List<SelectedSeatInfo> selectedSeats = new ArrayList<>();
 
     public CinemaFrame() {
-        super(uzv.alter.cinema.common.translate.Component.of("app.title").getString());
+        super(Component.of("app.title").getString());
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
         setSize(1150, 750);
@@ -49,9 +52,22 @@ public class CinemaFrame extends JFrame {
 
         currentSession = SessionInit.SESSION_A;
 
+        seatManager.loadBookedSeats();
+
         initUI();
         updateTimeSlots();
         reloadHallUI();
+    }
+
+    private String getCurrentSessionId() {
+        if (currentSession == null || currentSessionIndex < 0 || currentSessionIndex >= currentSession.getTimes().size()) {
+            return "DEFAULT_SESSION";
+        }
+        String filmKey = currentSession.getFilmName().getId();
+        String dateStr = currentSession.getDate(currentSessionIndex).getString();
+        String timeStr = currentSession.getTime(currentSessionIndex).getString();
+
+        return filmKey + "_" + dateStr + "_" + timeStr;
     }
 
     private void initUI() {
@@ -70,14 +86,14 @@ public class CinemaFrame extends JFrame {
         hallPanelContainer.setOpaque(false);
 
         selectedSeatsArea = new JTextArea(5, 18);
-        totalPriceLabel = new JLabel("0 ₸");
+        totalPriceLabel = new JLabel(Component.of("booking.price_format", 0).getString());
 
         contentPanel.add(hallPanelContainer, BorderLayout.CENTER);
         contentPanel.add(createSidebarPanel(), BorderLayout.EAST);
 
         mainPanel.add(contentPanel, BorderLayout.CENTER);
 
-        footerLabel = new JLabel(uzv.alter.cinema.common.translate.Component.of("app.footer").getString());
+        footerLabel = new JLabel(Component.of("app.footer").getString());
         footerLabel.setForeground(new Color(140, 145, 155));
         footerLabel.setFont(new Font("SansSerif", Font.PLAIN, 12));
         mainPanel.add(footerLabel, BorderLayout.SOUTH);
@@ -92,11 +108,11 @@ public class CinemaFrame extends JFrame {
         headerPanel.setLayout(new BoxLayout(headerPanel, BoxLayout.Y_AXIS));
         headerPanel.setOpaque(false);
 
-        titleLabel = new JLabel(uzv.alter.cinema.common.translate.Component.of("app.title").getString());
+        titleLabel = new JLabel(Component.of("app.title").getString());
         titleLabel.setFont(new Font("SansSerif", Font.BOLD, 26));
         titleLabel.setForeground(new Color(30, 35, 45));
 
-        subtitleLabel = new JLabel(uzv.alter.cinema.common.translate.Component.of("app.subtitle").getString());
+        subtitleLabel = new JLabel(Component.of("app.subtitle").getString());
         subtitleLabel.setFont(new Font("SansSerif", Font.PLAIN, 14));
         subtitleLabel.setForeground(new Color(130, 135, 145));
 
@@ -108,7 +124,7 @@ public class CinemaFrame extends JFrame {
         sessionComboBox.setSelectedItem(currentSession);
         sessionComboBox.setRenderer(new DefaultListCellRenderer() {
             @Override
-            public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
+            public java.awt.Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
                 super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
                 if (value instanceof Session s) {
                     setText(s.getFilmName().getString());
@@ -123,10 +139,10 @@ public class CinemaFrame extends JFrame {
         languageComboBox.setSelectedItem(TranslationCore.getCurrent());
         languageComboBox.setRenderer(new DefaultListCellRenderer() {
             @Override
-            public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
+            public java.awt.Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
                 super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
                 if (value instanceof String langCode) {
-                    setText(uzv.alter.cinema.common.translate.Component.of("lang." + langCode).getString());
+                    setText(Component.of("lang." + langCode).getString());
                 }
                 return this;
             }
@@ -166,9 +182,9 @@ public class CinemaFrame extends JFrame {
         JPanel filterPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 5));
         filterPanel.setOpaque(false);
 
-        String cardFilm = uzv.alter.cinema.common.translate.Component.of("card.film").getString();
-        String cardDateTime = uzv.alter.cinema.common.translate.Component.of("card.datetime").getString();
-        String cardLang = uzv.alter.cinema.common.translate.Component.of("card.lang").getString();
+        String cardFilm = Component.of("card.film").getString();
+        String cardDateTime = Component.of("card.datetime").getString();
+        String cardLang = Component.of("card.lang").getString();
 
         filterPanel.add(createSelectCard(cardFilm, sessionComboBox, 220));
         filterPanel.add(createSelectCard(cardDateTime, timeSlotComboBox, 180));
@@ -242,7 +258,7 @@ public class CinemaFrame extends JFrame {
                 new EmptyBorder(20, 20, 20, 20)
         ));
 
-        JLabel screenLabel = new JLabel(uzv.alter.cinema.common.translate.Component.of("hall.screen").getString(), SwingConstants.CENTER);
+        JLabel screenLabel = new JLabel(Component.of("hall.screen").getString(), SwingConstants.CENTER);
         screenLabel.setOpaque(true);
         screenLabel.setBackground(new Color(242, 244, 250));
         screenLabel.setForeground(new Color(130, 135, 150));
@@ -260,6 +276,7 @@ public class CinemaFrame extends JFrame {
         gbc.fill = GridBagConstraints.BOTH;
 
         Film film = currentSession.getFilm();
+        String sessionId = getCurrentSessionId();
 
         for (int r = 0; r < rows; r++) {
             gbc.gridx = 0;
@@ -303,33 +320,45 @@ public class CinemaFrame extends JFrame {
                 seatButton.setPreferredSize(new Dimension(baseWidth, baseHeight));
 
                 float finalPrice = film.costOfTicket() * seatType.getPriceModifier();
-                seatButton.setToolTipText(seatType.getName().getString() + " (" + (int) finalPrice + " ₸)");
 
                 int rowNum = r + 1;
                 int colNum = c + 1;
+                String seatKey = rowNum + "_" + colNum;
 
-                boolean isAlreadySelected = selectedSeats.stream()
-                        .anyMatch(s -> s.row() == rowNum && s.col() == colNum);
+                boolean isBookedInFile = seatManager.isBooked(sessionId, seatKey);
 
-                if (isAlreadySelected) {
-                    seatButton.setSelected(true);
-                }
+                if (isBookedInFile) {
+                    seatButton.setEnabled(false);
+                    seatButton.setBackground(new Color(200, 205, 215));
+                    seatButton.setForeground(new Color(120, 125, 135));
+                    seatButton.setBorder(BorderFactory.createLineBorder(new Color(180, 185, 195), 1));
+                    seatButton.setToolTipText(Component.of("seat.tooltip.booked", seatType.getName().getString()).getString());
+                } else {
+                    seatButton.setToolTipText(Component.of("seat.tooltip.available", seatType.getName().getString(), (int) finalPrice).getString());
 
-                applySeatStyle(seatButton, seatType, isAlreadySelected);
+                    boolean isAlreadySelected = selectedSeats.stream()
+                            .anyMatch(s -> s.row() == rowNum && s.col() == colNum);
 
-                seatButton.addActionListener(e -> {
-                    SelectedSeatInfo seatInfo = new SelectedSeatInfo(rowNum, colNum, seatType, finalPrice);
-                    boolean isSelected = seatButton.isSelected();
-
-                    applySeatStyle(seatButton, seatType, isSelected);
-
-                    if (isSelected) {
-                        selectedSeats.add(seatInfo);
-                    } else {
-                        selectedSeats.removeIf(s -> s.row() == rowNum && s.col() == colNum);
+                    if (isAlreadySelected) {
+                        seatButton.setSelected(true);
                     }
-                    updateBookingInfo();
-                });
+
+                    applySeatStyle(seatButton, seatType, isAlreadySelected);
+
+                    seatButton.addActionListener(e -> {
+                        SelectedSeatInfo seatInfo = new SelectedSeatInfo(rowNum, colNum, seatType, finalPrice);
+                        boolean isSelected = seatButton.isSelected();
+
+                        applySeatStyle(seatButton, seatType, isSelected);
+
+                        if (isSelected) {
+                            selectedSeats.add(seatInfo);
+                        } else {
+                            selectedSeats.removeIf(s -> s.row() == rowNum && s.col() == colNum);
+                        }
+                        updateBookingInfo();
+                    });
+                }
 
                 gbc.gridx = c + 1;
                 gbc.gridy = r;
@@ -385,7 +414,7 @@ public class CinemaFrame extends JFrame {
                 new EmptyBorder(20, 20, 20, 20)
         ));
 
-        sidebarTitle = new JLabel(uzv.alter.cinema.common.translate.Component.of("booking.your_choice").getString());
+        sidebarTitle = new JLabel(Component.of("booking.your_choice").getString());
         sidebarTitle.setFont(new Font("SansSerif", Font.BOLD, 18));
         sidebarTitle.setForeground(new Color(30, 35, 45));
 
@@ -394,14 +423,14 @@ public class CinemaFrame extends JFrame {
         selectedSeatsArea.setForeground(new Color(50, 55, 70));
         selectedSeatsArea.setOpaque(false);
 
-        totalTitle = new JLabel(uzv.alter.cinema.common.translate.Component.of("booking.total").getString());
+        totalTitle = new JLabel(Component.of("booking.total").getString());
         totalTitle.setForeground(new Color(140, 145, 155));
         totalTitle.setFont(new Font("SansSerif", Font.PLAIN, 13));
 
         totalPriceLabel.setFont(new Font("SansSerif", Font.BOLD, 28));
         totalPriceLabel.setForeground(new Color(110, 68, 204));
 
-        bookButton = new JButton(uzv.alter.cinema.common.translate.Component.of("booking.button").getString());
+        bookButton = new JButton(Component.of("booking.button").getString());
         bookButton.setFont(new Font("SansSerif", Font.BOLD, 14));
         bookButton.setBackground(new Color(110, 68, 204));
         bookButton.setForeground(Color.WHITE);
@@ -411,7 +440,9 @@ public class CinemaFrame extends JFrame {
         bookButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
         bookButton.setMaximumSize(new Dimension(Integer.MAX_VALUE, 42));
 
-        noteLabel = new JLabel(uzv.alter.cinema.common.translate.Component.of("booking.note").getString());
+        bookButton.addActionListener(e -> confirmBooking());
+
+        noteLabel = new JLabel(Component.of("booking.note").getString());
         noteLabel.setForeground(new Color(150, 155, 165));
         noteLabel.setFont(new Font("SansSerif", Font.PLAIN, 11));
 
@@ -437,21 +468,49 @@ public class CinemaFrame extends JFrame {
         return sidebar;
     }
 
+    private void confirmBooking() {
+        if (selectedSeats.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    Component.of("booking.warning.no_seats_msg").getString(),
+                    Component.of("booking.warning.no_seats_title").getString(),
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        String sessionId = getCurrentSessionId();
+
+        for (SelectedSeatInfo info : selectedSeats) {
+            String seatKey = info.row() + "_" + info.col();
+            seatManager.bookSeat(sessionId, seatKey);
+        }
+
+        seatManager.saveBookedSeats();
+
+        JOptionPane.showMessageDialog(this,
+                Component.of("booking.success.msg").getString(),
+                Component.of("booking.success.title").getString(),
+                JOptionPane.INFORMATION_MESSAGE);
+
+        selectedSeats.clear();
+        reloadHallUI();
+    }
+
     private void updateBookingInfo() {
         StringBuilder sb = new StringBuilder();
         float total = 0;
 
         for (SelectedSeatInfo info : selectedSeats) {
-            String rowText = uzv.alter.cinema.common.translate.Component.of("seat.row", info.row()).getString();
-            String seatText = uzv.alter.cinema.common.translate.Component.of("seat.number", info.col()).getString();
+            String rowText = Component.of("seat.row", info.row()).getString();
+            String seatText = Component.of("seat.number", info.col()).getString();
+            String priceText = Component.of("booking.price_format", (int) info.finalPrice()).getString();
 
             sb.append(rowText).append(" · ").append(seatText)
-                    .append(" (").append((int) info.finalPrice()).append(" ₸)\n");
+                    .append(" (").append(priceText).append(")\n");
             total += info.finalPrice();
         }
 
         selectedSeatsArea.setText(sb.toString());
-        totalPriceLabel.setText(String.format("%,d ₸", (int) total));
+        totalPriceLabel.setText(Component.of("booking.price_format", (int) total).getString());
     }
 
     private void rebuildUI() {
@@ -459,7 +518,7 @@ public class CinemaFrame extends JFrame {
 
         int savedSlotIndex = currentSessionIndex;
 
-        setTitle(uzv.alter.cinema.common.translate.Component.of("app.title").getString());
+        setTitle(Component.of("app.title").getString());
         initUI();
 
         currentSessionIndex = savedSlotIndex;
